@@ -43,8 +43,12 @@ Watches a directory for batch job files and shows counts like "W: 5 | A: 12 | D:
 - **Position memory** - Remembers location between restarts
 - **Auto-reload** - Configuration reloads automatically when you edit files
 - **Smart visibility** - Hides/shows based on server status
+- **Context menu** - Right-click or Alt+click for file clearing options
+- **Confirmation control** - Configure or bypass deletion confirmations
 
 The health check hits an endpoint every 5 seconds (configurable). Widget automatically hides/shows based on server status.
+
+**Context Menu:** Right-click or Alt+click the widget to access file clearing options. Hold Shift while clicking menu items to bypass confirmation dialogs.
 
 **Note:** Dragging requires granting Hammerspoon accessibility permissions in System Preferences > Security & Privacy > Privacy > Accessibility.
 

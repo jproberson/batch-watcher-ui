@@ -1,5 +1,3 @@
--- Server Monitor Module
--- Checks if the backend server is running
 
 local ServerMonitor = {}
 

@@ -1,4 +1,3 @@
--- Configuration for Batch Job Status Widget
 
 local function loadExternalConfig()
     local configPath = hs.fs.pathToAbsolute("~/.hammerspoon/batch-notifier/.env")
@@ -55,7 +54,8 @@ local config = {
     statusBar = {
         width = external.WIDGET_WIDTH or 375,
         height = external.WIDGET_HEIGHT or 30,
-        padding = 10
+        padding = 10,
+        confirmDeletes = external.CONFIRM_DELETES == nil and true or external.CONFIRM_DELETES
     },
     
     fileWatcher = {

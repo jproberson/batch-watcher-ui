@@ -1,5 +1,3 @@
--- Status Bar Module
--- Creates a simple status widget in the bottom-left corner
 
 local StatusBar = {}
 
@@ -32,7 +30,9 @@ local StatusBarManager = {
     isDragging = false,
     dragOffset = {x = 0, y = 0},
     position = {x = nil, y = nil},
-    globalMouseWatcher = nil
+    globalMouseWatcher = nil,
+    rightClickWatcher = nil,
+    config = nil
 }
 
 function StatusBar:new(config)
@@ -43,6 +43,8 @@ function StatusBar:new(config)
     for k, v in pairs(StatusBarManager) do
         manager[k] = v
     end
+    
+    manager.config = config
     
     if config and config.statusBar then
         if config.statusBar.height then
@@ -90,7 +92,6 @@ function StatusBarManager:createCanvas()
             h = self.height
         })
         
-        -- Enable mouse interactions
         newCanvas:level(hs.canvas.windowLevels.overlay)
         newCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
         newCanvas:clickActivating(false)
@@ -126,9 +127,16 @@ function StatusBarManager:setupDragHandlers()
     
     self.canvas:mouseCallback(function(canvas, message, id, x, y)        
         if message == "mouseDown" then
-            self.isDragging = true
             local mousePos = hs.mouse.absolutePosition()
             local canvasFrame = canvas:frame()
+            
+            local flags = hs.eventtap.checkKeyboardModifiers()
+            if flags.alt then
+                self:showContextMenu(mousePos)
+                return
+            end
+            
+            self.isDragging = true
             self.dragOffset.x = mousePos.x - canvasFrame.x
             self.dragOffset.y = mousePos.y - canvasFrame.y
         elseif message == "mouseUp" then
@@ -142,7 +150,6 @@ function StatusBarManager:setupDragHandlers()
         end
     end)
     
-    -- Set up global mouse tracking for dragging
     if self.globalMouseWatcher then
         self.globalMouseWatcher:stop()
     end
@@ -163,6 +170,25 @@ function StatusBarManager:setupDragHandlers()
     end)
     
     self.globalMouseWatcher:start()
+    
+    if self.rightClickWatcher then
+        self.rightClickWatcher:stop()
+    end
+    
+    self.rightClickWatcher = hs.eventtap.new({hs.eventtap.event.types.rightMouseDown}, function(event)
+        local mousePos = hs.mouse.absolutePosition()
+        local canvasFrame = self.canvas:frame()
+        
+        if mousePos.x >= canvasFrame.x and mousePos.x <= (canvasFrame.x + canvasFrame.w) and
+           mousePos.y >= canvasFrame.y and mousePos.y <= (canvasFrame.y + canvasFrame.h) then
+            self:showContextMenu(mousePos)
+            return true -- Consume the event
+        end
+        
+        return false -- Let other apps handle the right-click
+    end)
+    
+    self.rightClickWatcher:start()
 end
 
 function StatusBarManager:updateStatusText()
@@ -219,6 +245,11 @@ function StatusBarManager:hide()
         self.globalMouseWatcher = nil
     end
     
+    if self.rightClickWatcher then
+        self.rightClickWatcher:stop()
+        self.rightClickWatcher = nil
+    end
+    
     if self.canvas then
         self.canvas:delete()
         self.canvas = nil
@@ -240,6 +271,151 @@ function StatusBarManager:loadPosition()
         self.position.x = savedPosition.x
         self.position.y = savedPosition.y
     end
+end
+
+function StatusBarManager:showContextMenu(mousePos)
+    local flags = hs.eventtap.checkKeyboardModifiers()
+    local skipConfirm = flags.shift
+    
+    local menuItems = {
+        {title = "Clear Waiting Files", fn = function() self:clearFiles("waiting", skipConfirm) end},
+        {title = "Clear Active Files", fn = function() self:clearFiles("active", skipConfirm) end},
+        {title = "Clear Deadletter Files", fn = function() self:clearFiles("failed", skipConfirm) end},
+        {title = "-"},
+        {title = "Clear All Batch Files", fn = function() self:clearFiles("all", skipConfirm) end},
+    }
+    
+    local canvasFrame = self.canvas:frame()
+    local screen = self:getScreenInfo()
+    local menuHeight = 120 -- More accurate estimate for 5-item menu (about 24px per item)
+    
+    local menuPos = {x = mousePos.x, y = mousePos.y}
+    
+    local spaceBelow = screen.height - (canvasFrame.y + canvasFrame.h)
+    local spaceAbove = canvasFrame.y - screen.y
+    
+    if spaceBelow < menuHeight and spaceAbove > menuHeight then
+        menuPos.y = canvasFrame.y - menuHeight - 3
+    else
+        menuPos.y = canvasFrame.y + canvasFrame.h + 3
+    end
+    
+    menuPos.x = canvasFrame.x + (canvasFrame.w / 2)
+    
+    local menu = hs.menubar.new():setMenu(menuItems)
+    menu:popupMenu(menuPos)
+    
+    hs.timer.doAfter(0.1, function()
+        menu:delete()
+    end)
+end
+
+function StatusBarManager:clearFiles(type, skipConfirmation)
+    if not self.config or not self.config.baseDir then
+        hs.alert.show("No base directory configured")
+        return
+    end
+    
+    local queuePatterns = self.config.fileWatcher.queuePatterns or {"batch", "sandbox"}
+    local deadletterPattern = self.config.fileWatcher.deadletterPattern or "deadletter"
+    
+    local function getQueueDirs()
+        local dirs = {}
+        local attributes = hs.fs.attributes(self.config.baseDir)
+        
+        if not attributes or attributes.mode ~= "directory" then
+            return dirs
+        end
+        
+        for file in hs.fs.dir(self.config.baseDir) do
+            if file ~= "." and file ~= ".." then
+                local fullPath = self.config.baseDir .. "/" .. file
+                local fileAttributes = hs.fs.attributes(fullPath)
+                
+                if fileAttributes and fileAttributes.mode == "directory" then
+                    local lowerName = file:lower()
+                    for _, pattern in ipairs(queuePatterns) do
+                        if lowerName:find(pattern:lower()) then
+                            table.insert(dirs, file)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        
+        return dirs
+    end
+    
+    local function clearFilesInDir(dirPath, fileType)
+        local count = 0
+        local attributes = hs.fs.attributes(dirPath)
+        
+        if not attributes or attributes.mode ~= "directory" then
+            return count
+        end
+        
+        for file in hs.fs.dir(dirPath) do
+            if file ~= "." and file ~= ".." then
+                local fullPath = dirPath .. "/" .. file
+                local fileAttributes = hs.fs.attributes(fullPath)
+                
+                if fileAttributes and fileAttributes.mode == "file" then
+                    local shouldDelete = false
+                    
+                    if fileType == "all" then
+                        shouldDelete = true
+                    elseif fileType == "waiting" and file:sub(1, 2) == "x_" then
+                        shouldDelete = true
+                    elseif fileType == "active" and file:sub(1, 1):match("%d") then
+                        shouldDelete = true
+                    elseif fileType == "failed" then
+                        shouldDelete = true
+                    end
+                    
+                    if shouldDelete then
+                        local success = os.remove(fullPath)
+                        if success then
+                            count = count + 1
+                        end
+                    end
+                end
+            end
+        end
+        
+        return count
+    end
+    
+    local typeText = type == "all" and "all batch files" or type .. " files"
+    local shouldConfirm = self.config.statusBar.confirmDeletes and not skipConfirmation
+    
+    if shouldConfirm then
+        local confirmation = hs.dialog.blockAlert("Confirm File Deletion", 
+            "Are you sure you want to delete " .. typeText .. "?", 
+            "Delete", "Cancel")
+        
+        if confirmation == "Cancel" then
+            return
+        end
+    end
+    
+    local totalDeleted = 0
+    local queueDirs = getQueueDirs()
+    
+    for _, dirName in ipairs(queueDirs) do
+        local dirPath = self.config.baseDir .. "/" .. dirName
+        local isDeadletter = dirName:lower():find(deadletterPattern:lower()) ~= nil
+        
+        if type == "failed" and isDeadletter then
+            totalDeleted = totalDeleted + clearFilesInDir(dirPath, "failed")
+        elseif type ~= "failed" and not isDeadletter then
+            totalDeleted = totalDeleted + clearFilesInDir(dirPath, type)
+        elseif type == "all" then
+            totalDeleted = totalDeleted + clearFilesInDir(dirPath, "all")
+        end
+    end
+    
+    hs.alert.show("Deleted " .. totalDeleted .. " " .. typeText)
 end
 
 return StatusBar

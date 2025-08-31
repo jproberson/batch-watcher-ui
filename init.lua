@@ -1,6 +1,3 @@
--- Batch Job Hammerspoon Status Widget
--- Main entry point for the batch job monitoring system
--- Displays real-time counts of waiting, active, and failed jobs in bottom-left corner
 
 local config = require("batch-notifier.config")
 local FileWatcher = require("batch-notifier.modules.file-watcher")
@@ -70,9 +67,14 @@ local function start()
 
 	batchNotifier.serverMonitor:start()
 
-	-- Always show widget initially, server monitor will manage visibility if configured
 	batchNotifier.fileWatcher:start()
 	batchNotifier.statusBar:show()
+	
+	hs.timer.doAfter(0.5, function()
+		if batchNotifier.fileWatcher then
+			batchNotifier.fileWatcher:checkForChanges()
+		end
+	end)
 
 	batchNotifier.isRunning = true
 	print("Batch Job Status Widget started!")
@@ -139,7 +141,6 @@ hs.batchNotifier = {
 	update = triggerUpdate,
 }
 
--- Auto-reload config when .lua files change
 local function reloadConfig(files)
 	local doReload = false
 	for _, file in pairs(files) do
@@ -152,7 +153,28 @@ local function reloadConfig(files)
 	end
 end
 
-local configWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
+local hammerspoonConfigWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
+
+local function getSourceDirectory()
+    local info = debug.getinfo(1, "S")
+    if info and info.source then
+        local sourcePath = info.source:sub(2)
+        local sourceDir = sourcePath:match("^(.*/)")
+        if sourceDir then
+            local realPath = hs.fs.symlinkAttributes(sourceDir, "target")
+            if realPath then
+                return realPath
+            end
+            return sourceDir
+        end
+    end
+    return nil
+end
+
+local sourceDir = getSourceDirectory()
+if sourceDir then
+    local sourceConfigWatcher = hs.pathwatcher.new(sourceDir, reloadConfig):start()
+end
 
 if config.autoStart then
 	hs.timer.doAfter(1, start)
