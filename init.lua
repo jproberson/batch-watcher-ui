@@ -70,10 +70,9 @@ local function start()
 
 	batchNotifier.serverMonitor:start()
 
-	if not config.serverCheck.enabled or not config.serverCheck.hideWhenServerDown then
-		batchNotifier.fileWatcher:start()
-		batchNotifier.statusBar:show()
-	end
+	-- Always show widget initially, server monitor will manage visibility if configured
+	batchNotifier.fileWatcher:start()
+	batchNotifier.statusBar:show()
 
 	batchNotifier.isRunning = true
 	print("Batch Job Status Widget started!")
@@ -98,7 +97,7 @@ local function stop()
 	end
 
 	batchNotifier.isRunning = false
-	print("⏹️  Batch Job Status Widget stopped")
+	print("Batch Job Status Widget stopped")
 end
 
 local function restart()
@@ -123,7 +122,7 @@ local function triggerUpdate()
 		print("Batch notifier is not running")
 		return
 	end
-	
+
 	if batchNotifier.fileWatcher then
 		batchNotifier.fileWatcher:checkForChanges()
 		print("Manual file count update triggered")
@@ -140,6 +139,21 @@ hs.batchNotifier = {
 	update = triggerUpdate,
 }
 
+-- Auto-reload config when .lua files change
+local function reloadConfig(files)
+	local doReload = false
+	for _, file in pairs(files) do
+		if file:sub(-4) == ".lua" then
+			doReload = true
+		end
+	end
+	if doReload then
+		hs.reload()
+	end
+end
+
+local configWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", reloadConfig):start()
+
 if config.autoStart then
 	hs.timer.doAfter(1, start)
 else
@@ -151,3 +165,6 @@ else
 	print("  hs.batchNotifier.status()   - Show current status")
 	print("  hs.batchNotifier.update()   - Force file count update")
 end
+
+hs.alert.show("Batch Notifier Config Loaded")
+

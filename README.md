@@ -36,9 +36,17 @@ require("batch-notifier")
 
 ## What it does
 
-Watches a directory for batch job files and shows counts like "W: 5 | A: 12 | D: 0" in a compact widget. Only appears when the health check passes, so you know your backend is actually running.
+Watches a directory for batch job files and shows counts like "W: 5 | A: 12 | D: 0" in a compact draggable widget. Only appears when the health check passes, so you know your backend is actually running.
+
+**Features:**
+- **Draggable** - Click and drag to reposition the widget anywhere on screen
+- **Position memory** - Remembers location between restarts
+- **Auto-reload** - Configuration reloads automatically when you edit files
+- **Smart visibility** - Hides/shows based on server status
 
 The health check hits an endpoint every 5 seconds (configurable). Widget automatically hides/shows based on server status.
+
+**Note:** Dragging requires granting Hammerspoon accessibility permissions in System Preferences > Security & Privacy > Privacy > Accessibility.
 
 ## Console commands
 

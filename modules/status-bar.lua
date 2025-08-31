@@ -28,7 +28,11 @@ local StatusBarManager = {
     textColor = COLORS.TEXT,
     waitingCount = 0,
     activeCount = 0,
-    failedCount = 0
+    failedCount = 0,
+    isDragging = false,
+    dragOffset = {x = 0, y = 0},
+    position = {x = nil, y = nil},
+    globalMouseWatcher = nil
 }
 
 function StatusBar:new(config)
@@ -48,6 +52,8 @@ function StatusBar:new(config)
             manager.width = config.statusBar.width
         end
     end
+    
+    manager:loadPosition()
     
     return manager
 end
@@ -73,13 +79,23 @@ function StatusBarManager:createCanvas()
         self.canvas:delete()
     end
     
+    local x = self.position.x or (screen.x + DEFAULTS.EDGE_PADDING)
+    local y = self.position.y or (screen.y + screen.height - self.height - DEFAULTS.EDGE_PADDING)
+    
     local success, canvas = pcall(function()
-        return hs.canvas.new({
-            x = screen.x + DEFAULTS.EDGE_PADDING,
-            y = screen.y + screen.height - self.height - DEFAULTS.EDGE_PADDING,
+        local newCanvas = hs.canvas.new({
+            x = x,
+            y = y,
             w = self.width,
             h = self.height
         })
+        
+        -- Enable mouse interactions
+        newCanvas:level(hs.canvas.windowLevels.overlay)
+        newCanvas:behavior(hs.canvas.windowBehaviors.canJoinAllSpaces)
+        newCanvas:clickActivating(false)
+        
+        return newCanvas
     end)
     
     if not success or not canvas then
@@ -93,12 +109,60 @@ function StatusBarManager:createCanvas()
         type = "rectangle",
         action = "fill",
         roundedRectRadii = {xRadius = DEFAULTS.CORNER_RADIUS, yRadius = DEFAULTS.CORNER_RADIUS},
-        fillColor = self.backgroundColor
+        fillColor = self.backgroundColor,
+        trackMouseDown = true,
+        trackMouseUp = true,
+        trackMouseMove = true
     })
     
+    self:setupDragHandlers()
     self:updateStatusText()
     self.canvas:show()
     return true
+end
+
+function StatusBarManager:setupDragHandlers()
+    if not self.canvas then return end
+    
+    self.canvas:mouseCallback(function(canvas, message, id, x, y)        
+        if message == "mouseDown" then
+            self.isDragging = true
+            local mousePos = hs.mouse.absolutePosition()
+            local canvasFrame = canvas:frame()
+            self.dragOffset.x = mousePos.x - canvasFrame.x
+            self.dragOffset.y = mousePos.y - canvasFrame.y
+        elseif message == "mouseUp" then
+            if self.isDragging then
+                self.isDragging = false
+                local canvasFrame = canvas:frame()
+                self.position.x = canvasFrame.x
+                self.position.y = canvasFrame.y
+                self:savePosition()
+            end
+        end
+    end)
+    
+    -- Set up global mouse tracking for dragging
+    if self.globalMouseWatcher then
+        self.globalMouseWatcher:stop()
+    end
+    
+    self.globalMouseWatcher = hs.eventtap.new({hs.eventtap.event.types.leftMouseDragged}, function(event)
+        if self.isDragging then
+            local mousePos = hs.mouse.absolutePosition()
+            local newX = mousePos.x - self.dragOffset.x
+            local newY = mousePos.y - self.dragOffset.y
+            
+            local screen = self:getScreenInfo()
+            newX = math.max(screen.x, math.min(newX, screen.x + screen.width - self.width))
+            newY = math.max(screen.y, math.min(newY, screen.y + screen.height - self.height))
+            
+            self.canvas:frame({x = newX, y = newY, w = self.width, h = self.height})
+        end
+        return false
+    end)
+    
+    self.globalMouseWatcher:start()
 end
 
 function StatusBarManager:updateStatusText()
@@ -150,11 +214,32 @@ function StatusBarManager:show()
 end
 
 function StatusBarManager:hide()
+    if self.globalMouseWatcher then
+        self.globalMouseWatcher:stop()
+        self.globalMouseWatcher = nil
+    end
+    
     if self.canvas then
         self.canvas:delete()
         self.canvas = nil
     end
 end
 
+function StatusBarManager:savePosition()
+    if self.position.x and self.position.y then
+        hs.settings.set("batchNotifier.position", {
+            x = self.position.x,
+            y = self.position.y
+        })
+    end
+end
+
+function StatusBarManager:loadPosition()
+    local savedPosition = hs.settings.get("batchNotifier.position")
+    if savedPosition and savedPosition.x and savedPosition.y then
+        self.position.x = savedPosition.x
+        self.position.y = savedPosition.y
+    end
+end
 
 return StatusBar

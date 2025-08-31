@@ -17,7 +17,8 @@ local ServerMonitorManager = {
     isServerUp = false,
     checkTimer = nil,
     config = nil,
-    callback = nil
+    callback = nil,
+    currentTask = nil
 }
 
 function ServerMonitor:new(config, callback)
@@ -41,6 +42,11 @@ function ServerMonitorManager:checkServerHttp()
         return
     end
     
+    if self.currentTask then
+        self.currentTask:terminate()
+        self.currentTask = nil
+    end
+    
     local url = self.config.healthUrl
     
     local task = hs.task.new(CURL_PATH, function(exitCode, stdOut, stdErr)
@@ -57,6 +63,7 @@ function ServerMonitorManager:checkServerHttp()
             print(message)
         end
         
+        self.currentTask = nil
         self:updateServerStatus(serverUp)
     end, {
         "--connect-timeout", CURL_TIMEOUTS.CONNECT,
@@ -67,9 +74,11 @@ function ServerMonitorManager:checkServerHttp()
         url
     })
     
+    self.currentTask = task
     local success = task:start()
-    if not success and self.config.debug then
+    if not success then
         print("Failed to start curl task for health check")
+        self.currentTask = nil
         self:updateServerStatus(false)
     end
 end
@@ -104,9 +113,10 @@ function ServerMonitorManager:checkServerProcess()
 end
 
 function ServerMonitorManager:updateServerStatus(isUp)
-    if self.isServerUp ~= isUp then
-        self.isServerUp = isUp
-        
+    local statusChanged = (self.isServerUp ~= isUp)
+    self.isServerUp = isUp
+    
+    if statusChanged then
         if self.callback then
             self.callback({
                 type = "server_status_changed",
@@ -151,8 +161,14 @@ function ServerMonitorManager:stop()
     if self.checkTimer then
         self.checkTimer:stop()
         self.checkTimer = nil
-        print("Server monitoring stopped")
     end
+    
+    if self.currentTask then
+        self.currentTask:terminate()
+        self.currentTask = nil
+    end
+    
+    print("Server monitoring stopped")
 end
 
 function ServerMonitorManager:getServerStatus()
