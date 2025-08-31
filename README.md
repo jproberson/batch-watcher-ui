@@ -35,6 +35,7 @@ require("batch-notifier")
 Watches a directory for batch job files and shows counts like "W: 5 | A: 12 | D: 0" in a compact draggable widget. Only appears when the health check passes, so you know your backend is actually running.
 
 **Features:**
+- **Multiple display modes** - Floating widget, menu bar, or both
 - **Draggable** - Click and drag to reposition the widget anywhere on screen
 - **Position memory** - Remembers location between restarts
 - **Auto-reload** - Configuration reloads automatically when you edit files
@@ -77,6 +78,7 @@ return {
     
     -- Widget appearance and behavior  
     statusBar = {
+        displayMode = "floating",                      -- Display mode: "floating", "menubar", "both" (default: "floating")
         width = 180,                                   -- Widget width in pixels (default: 180)
         height = 30,                                   -- Widget height in pixels (default: 30)
         confirmDeletes = false,                        -- Show confirmation dialogs for file deletion (default: false)
@@ -100,6 +102,10 @@ return {
             -- format = "{waitingCount}w {activeCount}a {failedCount}d"
             -- format = "[{waiting}:{waitingCount}, {active}:{activeCount}, {failed}:{failedCount}]"
             -- format = "Waiting: {waitingCount}, Active: {activeCount}, Failed: {failedCount}"
+        },
+        menubar = {                                        -- Menu bar specific settings (optional)
+            format = "{waitingCount}|{activeCount}|{failedCount}", -- Compact format for menu bar space
+            showWhenZero = true                            -- Show menu bar item when all counts are zero (default: true)
         }
     },
     

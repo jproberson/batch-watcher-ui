@@ -3,7 +3,13 @@ local StatusBar = {}
 
 local ELEMENT_INDICES = {
     BACKGROUND = 1,
-    TEXT_START = 2
+    BACKGROUND_WAITING = 2,
+    BACKGROUND_ACTIVE = 3,
+    BACKGROUND_FAILED = 4,
+    TEXT_WAITING = 5,
+    TEXT_ACTIVE = 6,
+    TEXT_FAILED = 7,
+    TEXT_SEPARATORS = 8
 }
 
 
@@ -21,7 +27,10 @@ local StatusBarManager = {
     position = {x = nil, y = nil},
     globalMouseWatcher = nil,
     rightClickWatcher = nil,
-    config = nil
+    config = nil,
+    lastActivity = nil,
+    originalBackgroundColor = nil,
+    animatedCounts = {waiting = 0, active = 0, failed = 0}
 }
 
 function StatusBar:new(config)
@@ -30,7 +39,14 @@ function StatusBar:new(config)
     self.__index = self
     
     for k, v in pairs(StatusBarManager) do
-        manager[k] = v
+        if type(v) == "table" then
+            manager[k] = {}
+            for tk, tv in pairs(v) do
+                manager[k][tk] = tv
+            end
+        else
+            manager[k] = v
+        end
     end
     
     manager.config = config
@@ -42,9 +58,16 @@ function StatusBar:new(config)
         manager.textColor = config.statusBar.colors.text
         manager.ui = config.statusBar.ui
         manager.display = config.statusBar.display
+        manager.animations = config.statusBar.animations
     end
     
     manager:loadPosition()
+    
+    manager.animatedCounts = {
+        waiting = manager.waitingCount,
+        active = manager.activeCount,
+        failed = manager.failedCount
+    }
     
     return manager
 end
@@ -106,7 +129,7 @@ function StatusBarManager:createCanvas()
     })
     
     self:setupDragHandlers()
-    self:updateStatusText()
+    self:setupTextElements()
     self.canvas:show()
     return true
 end
@@ -180,35 +203,143 @@ function StatusBarManager:setupDragHandlers()
     self.rightClickWatcher:start()
 end
 
-function StatusBarManager:updateStatusText()
+function StatusBarManager:setupTextElements()
     if not self.canvas then return end
     
+    -- Remove all existing text elements
     while #self.canvas > ELEMENT_INDICES.BACKGROUND do
-        self.canvas:removeElement(ELEMENT_INDICES.TEXT_START)
+        self.canvas:removeElement(ELEMENT_INDICES.BACKGROUND + 1)
     end
     
-    local statusText = self.display.format
-        :gsub("{waiting}", self.display.waitingLabel)
-        :gsub("{active}", self.display.activeLabel)
-        :gsub("{failed}", self.display.failedLabel)
-        :gsub("{waitingCount}", tostring(self.waitingCount))
-        :gsub("{activeCount}", tostring(self.activeCount))
-        :gsub("{failedCount}", tostring(self.failedCount))
+    -- Fixed layout calculations for proper spacing
+    local totalWidth = self.width
+    local textY = self.ui.textVerticalOffset
+    local textHeight = self.height - self.ui.textHeightReduction
+    
+    -- Reserve space for separators and calculate section widths
+    local separatorWidth = 12  -- Width for " | " separators
+    local padding = 8
+    local availableWidth = totalWidth - (2 * separatorWidth) - (2 * padding)
+    local sectionWidth = availableWidth / 3
+    
+    -- Section positions
+    local waitingX = padding
+    local activeX = waitingX + sectionWidth + separatorWidth
+    local failedX = activeX + sectionWidth + separatorWidth
+    
+    local transparentColor = {red = 0, green = 0, blue = 0, alpha = 0}
+    local cornerRadius = self.ui.cornerRadius or 8
     
     self.canvas:insertElement({
+        type = "rectangle",
+        action = "fill",
+        fillColor = transparentColor,
+        roundedRectRadii = {xRadius = cornerRadius, yRadius = cornerRadius},
+        frame = {x = waitingX - 2, y = 2, w = sectionWidth + 4, h = self.height - 4}
+    })
+    
+    self.canvas:insertElement({
+        type = "rectangle", 
+        action = "fill",
+        fillColor = transparentColor,
+        roundedRectRadii = {xRadius = cornerRadius, yRadius = cornerRadius},
+        frame = {x = activeX - 2, y = 2, w = sectionWidth + 4, h = self.height - 4}
+    })
+    
+    self.canvas:insertElement({
+        type = "rectangle",
+        action = "fill", 
+        fillColor = transparentColor,
+        roundedRectRadii = {xRadius = cornerRadius, yRadius = cornerRadius},
+        frame = {x = failedX - 2, y = 2, w = sectionWidth + 4, h = self.height - 4}
+    })
+    
+    local waitingText = string.format("%s: %2d", self.display.waitingLabel, math.max(0, math.floor(self.animatedCounts.waiting + 0.5)))
+    local activeText = string.format("%s: %2d", self.display.activeLabel, math.max(0, math.floor(self.animatedCounts.active + 0.5)))
+    local failedText = string.format("%s: %2d", self.display.failedLabel, math.max(0, math.floor(self.animatedCounts.failed + 0.5)))
+    self.canvas:insertElement({
         type = "text",
-        text = statusText,
+        text = waitingText,
         textFont = "Monaco",
         textSize = self.ui.textSize,
         textColor = self.textColor,
         textAlignment = "center",
-        frame = {
-            x = 0, 
-            y = self.ui.textVerticalOffset, 
-            w = self.width, 
-            h = self.height - self.ui.textHeightReduction
-        }
+        frame = {x = waitingX, y = textY, w = sectionWidth, h = textHeight}
     })
+    
+    self.canvas:insertElement({
+        type = "text",
+        text = activeText,
+        textFont = "Monaco",
+        textSize = self.ui.textSize,
+        textColor = self.textColor,
+        textAlignment = "center",
+        frame = {x = activeX, y = textY, w = sectionWidth, h = textHeight}
+    })
+    
+    self.canvas:insertElement({
+        type = "text",
+        text = failedText,
+        textFont = "Monaco",
+        textSize = self.ui.textSize,
+        textColor = self.textColor,
+        textAlignment = "center",
+        frame = {x = failedX, y = textY, w = sectionWidth, h = textHeight}
+    })
+    
+    self.canvas:insertElement({
+        type = "text",
+        text = "|",
+        textFont = "Monaco",
+        textSize = self.ui.textSize,
+        textColor = self.textColor,
+        textAlignment = "center",
+        frame = {x = waitingX + sectionWidth + 2, y = textY, w = separatorWidth - 4, h = textHeight}
+    })
+    
+    self.canvas:insertElement({
+        type = "text",
+        text = "|",
+        textFont = "Monaco",
+        textSize = self.ui.textSize,
+        textColor = self.textColor,
+        textAlignment = "center",
+        frame = {x = activeX + sectionWidth + 2, y = textY, w = separatorWidth - 4, h = textHeight}
+    })
+end
+
+function StatusBarManager:updateSingleCounterText(counterType)
+    if not self.canvas then return end
+    
+    local elementIndex
+    local displayValue = math.max(0, math.floor(self.animatedCounts[counterType] + 0.5))
+    local labelText
+    
+    if counterType == "waiting" then
+        elementIndex = ELEMENT_INDICES.TEXT_WAITING
+        labelText = string.format("%s: %2d", self.display.waitingLabel, displayValue)
+    elseif counterType == "active" then
+        elementIndex = ELEMENT_INDICES.TEXT_ACTIVE
+        labelText = string.format("%s: %2d", self.display.activeLabel, displayValue)
+    elseif counterType == "failed" then
+        elementIndex = ELEMENT_INDICES.TEXT_FAILED
+        labelText = string.format("%s: %2d", self.display.failedLabel, displayValue)
+    else
+        return
+    end
+    
+    if elementIndex <= #self.canvas then
+        local currentText = self.canvas[elementIndex].text or ""
+        if currentText ~= labelText then
+            self.canvas[elementIndex].text = labelText
+        end
+    end
+end
+
+function StatusBarManager:updateStatusText()
+    self:updateSingleCounterText("waiting")
+    self:updateSingleCounterText("active") 
+    self:updateSingleCounterText("failed")
 end
 
 function StatusBarManager:updateCounts(waiting, active, failed)
@@ -216,13 +347,100 @@ function StatusBarManager:updateCounts(waiting, active, failed)
                           self.activeCount ~= active or 
                           self.failedCount ~= failed)
     
-    self.waitingCount = waiting
-    self.activeCount = active
-    self.failedCount = failed
-    
-    if countsChanged then
+    if countsChanged then        
+        local activityType = self:detectActivity(waiting, active, failed)
+        
+        self.waitingCount = waiting
+        self.activeCount = active
+        self.failedCount = failed
+        
+        self.animatedCounts.waiting = waiting
+        self.animatedCounts.active = active
+        self.animatedCounts.failed = failed
         self:updateStatusText()
+        
+        if self.animations and self.animations.enabled then
+            self:showSimpleActivityIndicator(activityType)
+        end
     end
+end
+
+function StatusBarManager:detectActivity(waiting, active, failed)
+    local waitingDiff = waiting - self.waitingCount
+    local activeDiff = active - self.activeCount
+    local failedDiff = failed - self.failedCount
+    
+    if failedDiff > 0 then
+        return "failure"
+    elseif activeDiff < 0 and waitingDiff <= 0 then
+        return "completion"
+    elseif activeDiff > 0 then
+        return "processing"
+    elseif waitingDiff > 0 then
+        return "incoming"
+    else
+        return "change"
+    end
+end
+
+function StatusBarManager:showSimpleActivityIndicator(activityType)
+    if not self.canvas then return end
+    
+    if activityType == "failure" then
+        self:flashSection("failed", "red")
+    elseif activityType == "completion" then
+        self:flashSection("active", "green")
+    elseif activityType == "processing" then
+        self:flashSection("active", "blue")
+    elseif activityType == "incoming" then
+        self:flashSection("waiting", "yellow")
+    end
+end
+
+function StatusBarManager:flashSection(sectionType, color)
+    if not self.canvas then return end
+    
+    local sectionIndex
+    if sectionType == "waiting" then
+        sectionIndex = ELEMENT_INDICES.BACKGROUND_WAITING
+    elseif sectionType == "active" then
+        sectionIndex = ELEMENT_INDICES.BACKGROUND_ACTIVE
+    elseif sectionType == "failed" then
+        sectionIndex = ELEMENT_INDICES.BACKGROUND_FAILED
+    else
+        return
+    end
+    
+    local flashColor
+    if color == "red" then
+        flashColor = {red = 0.8, green = 0.2, blue = 0.2, alpha = 0.6}
+    elseif color == "green" then
+        flashColor = {red = 0.2, green = 0.8, blue = 0.2, alpha = 0.6}
+    elseif color == "blue" then
+        flashColor = {red = 0.2, green = 0.4, blue = 0.8, alpha = 0.6}
+    elseif color == "yellow" then
+        flashColor = {red = 0.8, green = 0.8, blue = 0.2, alpha = 0.6}
+    else
+        return
+    end
+    
+    if sectionIndex <= #self.canvas then
+        self.canvas[sectionIndex].fillColor = flashColor
+        
+        local flashDuration = self.animations and self.animations.backgroundFlashDuration or 0.3
+        hs.timer.doAfter(flashDuration, function()
+            if self.canvas and sectionIndex <= #self.canvas then
+                local transparentColor = {red = 0, green = 0, blue = 0, alpha = 0}
+                self.canvas[sectionIndex].fillColor = transparentColor
+            end
+        end)
+    end
+end
+
+function StatusBarManager:updateCanvas()
+    if not self.canvas then return end
+    
+    self.canvas[ELEMENT_INDICES.BACKGROUND].fillColor = self.backgroundColor
 end
 
 function StatusBarManager:show()

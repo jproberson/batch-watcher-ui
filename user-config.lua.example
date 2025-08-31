@@ -12,8 +12,9 @@ return {
         hideWhenServerDown = true
     },
     
-    -- Widget appearance
+    -- Widget appearance and display mode
     statusBar = {
+        displayMode = "floating",  -- "floating", "menubar", or "both"
         width = 180,
         height = 30,
         confirmDeletes = false,
@@ -36,6 +37,11 @@ return {
             activeLabel = "Active",     -- Label for active jobs  
             failedLabel = "Failed",     -- Label for failed jobs
             format = "{waiting}: {waitingCount} | {active}: {activeCount} | {failed}: {failedCount}"
+        },
+        -- Menu bar specific settings (when displayMode includes "menubar")
+        menubar = {
+            format = "{waitingCount}|{activeCount}|{failedCount}",  -- Compact format for menu bar
+            showWhenZero = true         -- Show menu bar item even when all counts are zero
         }
     },
     

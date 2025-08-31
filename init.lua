@@ -2,11 +2,13 @@
 local config = require("batch-notifier.config")
 local FileWatcher = require("batch-notifier.modules.file-watcher")
 local StatusBar = require("batch-notifier.modules.status-bar")
+local MenuBar = require("batch-notifier.modules.menu-bar")
 local ServerMonitor = require("batch-notifier.modules.server-monitor")
 
 local batchNotifier = {
 	fileWatcher = nil,
 	statusBar = nil,
+	menuBar = nil,
 	serverMonitor = nil,
 	isRunning = false,
 }
@@ -14,7 +16,16 @@ local batchNotifier = {
 local function initialize()
 	print("Initializing Batch Job Status Widget...")
 
-	batchNotifier.statusBar = StatusBar:new(config)
+	local displayMode = config.statusBar.displayMode or "floating"
+	
+	if displayMode == "floating" or displayMode == "both" then
+		batchNotifier.statusBar = StatusBar:new(config)
+	end
+	
+	if displayMode == "menubar" or displayMode == "both" then
+		batchNotifier.menuBar = MenuBar:new(config)
+	end
+	
 	batchNotifier.fileWatcher = FileWatcher:new(config.baseDir, function(event)
 		handleFileEvent(event)
 	end, config)
@@ -26,8 +37,21 @@ local function initialize()
 end
 
 function handleFileEvent(event)
+	if config.debug then
+		print(string.format("File event: W:%d, A:%d, F:%d", event.counts.waiting, event.counts.active, event.counts.failed))
+	end
+	
 	if batchNotifier.statusBar then
+		if config.debug then
+			print("Updating floating widget")
+		end
 		batchNotifier.statusBar:updateCounts(event.counts.waiting, event.counts.active, event.counts.failed)
+	end
+	if batchNotifier.menuBar then
+		if config.debug then
+			print("Updating menu bar widget")
+		end
+		batchNotifier.menuBar:updateCounts(event.counts.waiting, event.counts.active, event.counts.failed)
 	end
 end
 
@@ -38,6 +62,9 @@ function handleServerEvent(event)
 				if batchNotifier.statusBar then
 					batchNotifier.statusBar:show()
 				end
+				if batchNotifier.menuBar then
+					batchNotifier.menuBar:show()
+				end
 				if batchNotifier.fileWatcher then
 					batchNotifier.fileWatcher:start()
 				end
@@ -45,6 +72,9 @@ function handleServerEvent(event)
 			else
 				if batchNotifier.statusBar then
 					batchNotifier.statusBar:hide()
+				end
+				if batchNotifier.menuBar then
+					batchNotifier.menuBar:hide()
 				end
 				if batchNotifier.fileWatcher then
 					batchNotifier.fileWatcher:stop()
@@ -68,7 +98,12 @@ local function start()
 	batchNotifier.serverMonitor:start()
 
 	batchNotifier.fileWatcher:start()
-	batchNotifier.statusBar:show()
+	if batchNotifier.statusBar then
+		batchNotifier.statusBar:show()
+	end
+	if batchNotifier.menuBar then
+		batchNotifier.menuBar:show()
+	end
 	
 	hs.timer.doAfter(0.5, function()
 		if batchNotifier.fileWatcher then
@@ -94,6 +129,10 @@ local function stop()
 		batchNotifier.statusBar:hide()
 	end
 
+	if batchNotifier.menuBar then
+		batchNotifier.menuBar:hide()
+	end
+
 	if batchNotifier.serverMonitor then
 		batchNotifier.serverMonitor:stop()
 	end
@@ -115,7 +154,10 @@ local function status()
 	print(string.format("Watching directory: %s", watchDir))
 
 	if batchNotifier.statusBar then
-		print("Status bar is visible")
+		print("Floating widget is enabled")
+	end
+	if batchNotifier.menuBar then
+		print("Menu bar widget is enabled")
 	end
 end
 

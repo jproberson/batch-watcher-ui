@@ -3,6 +3,7 @@ local defaults = {
     autoStart = true,
     
     statusBar = {
+        displayMode = "floating",
         width = 180,
         height = 30,
         confirmDeletes = false,
@@ -23,6 +24,14 @@ local defaults = {
             failedLabel = "D",
             separator = "  |  ",
             format = "{waiting}: {waitingCount}  |  {active}: {activeCount}  |  {failed}: {failedCount}"
+        },
+        menubar = {
+            format = "{waitingCount}|{activeCount}|{failedCount}",
+            showWhenZero = true
+        },
+        animations = {
+            enabled = true,
+            backgroundFlashDuration = 0.3
         }
     },
     
