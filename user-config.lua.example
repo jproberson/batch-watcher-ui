@@ -1,0 +1,53 @@
+-- User Configuration for Batch Job Status Widget
+-- Copy this file to ~/.hammerspoon/batch-notifier/user-config.lua and edit your settings
+
+return {
+    -- Directory containing your batch job folders
+    baseDir = "~/projects/your-project/batch-directories",
+    
+    -- Server health check URL (optional)
+    serverCheck = {
+        healthUrl = "https://your-server.com/health",
+        checkInterval = 5,
+        hideWhenServerDown = true
+    },
+    
+    -- Widget appearance
+    statusBar = {
+        width = 180,
+        height = 30,
+        confirmDeletes = false,
+        -- Custom colors (optional)
+        colors = {
+            background = {red = 0.2, green = 0.2, blue = 0.2, alpha = 0.9},
+            text = {red = 1.0, green = 1.0, blue = 1.0}
+        },
+        -- Advanced UI customization (optional)
+        ui = {
+            edgePadding = 10,          -- Distance from screen edges
+            cornerRadius = 8,          -- Rounded corner radius
+            textVerticalOffset = 7,    -- Text position adjustment
+            textHeightReduction = 14,  -- Text area height adjustment  
+            textSize = 12              -- Font size
+        },
+        -- Status display customization (optional)
+        display = {
+            waitingLabel = "Waiting",   -- Label for waiting jobs
+            activeLabel = "Active",     -- Label for active jobs  
+            failedLabel = "Failed",     -- Label for failed jobs
+            format = "{waiting}: {waitingCount} | {active}: {activeCount} | {failed}: {failedCount}"
+        }
+    },
+    
+    -- File patterns to match (optional)
+    fileWatcher = {
+        queuePatterns = {"batch", "sandbox"},
+        deadletterPattern = "deadletter"
+    },
+    
+    -- Auto-start when Hammerspoon loads
+    autoStart = true,
+    
+    -- Debug logging
+    debug = false
+}

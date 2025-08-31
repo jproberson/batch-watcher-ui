@@ -1,77 +1,92 @@
-
-local function loadExternalConfig()
-    local configPath = hs.fs.pathToAbsolute("~/.hammerspoon/batch-notifier/.env")
-    local externalConfig = {}
-    
-    local file = io.open(configPath, "r")
-    if not file then
-        print(".env file not found, using defaults")
-        return {}
-    end
-    
-    for line in file:lines() do
-        line = line:gsub("^%s*", ""):gsub("%s*$", "")
-        if line ~= "" and not line:match("^#") then
-            local key, value = line:match("^([^=]+)=(.*)$")
-            if key and value then
-                key = key:gsub("^%s*", ""):gsub("%s*$", "")
-                value = value:gsub("^%s*", ""):gsub("%s*$", "")
-                
-                if value:lower() == "true" then
-                    externalConfig[key] = true
-                elseif value:lower() == "false" then
-                    externalConfig[key] = false
-                elseif tonumber(value) then
-                    externalConfig[key] = tonumber(value)
-                else
-                    externalConfig[key] = value
-                end
-            end
-        end
-    end
-    
-    file:close()
-    return externalConfig
-end
-
-local external = loadExternalConfig()
-
-local function splitPatterns(str)
-    local patterns = {}
-    if str then
-        for pattern in string.gmatch(str, "[^,]+") do
-            local trimmed = pattern:gsub("^%s*", ""):gsub("%s*$", "")
-            table.insert(patterns, trimmed)
-        end
-    end
-    return patterns
-end
-
-local config = {
-    baseDir = external.WATCH_DIR and hs.fs.pathToAbsolute(external.WATCH_DIR),
-    autoStart = external.AUTO_START ~= nil and external.AUTO_START or true,
+local defaults = {
+    baseDir = nil,
+    autoStart = true,
     
     statusBar = {
-        width = external.WIDGET_WIDTH or 375,
-        height = external.WIDGET_HEIGHT or 30,
-        padding = 10,
-        confirmDeletes = external.CONFIRM_DELETES == nil and true or external.CONFIRM_DELETES
+        width = 180,
+        height = 30,
+        confirmDeletes = false,
+        colors = {
+            background = {red = 0.1, green = 0.1, blue = 0.1, alpha = 0.8},
+            text = {red = 0.9, green = 0.9, blue = 0.9}
+        },
+        ui = {
+            edgePadding = 10,
+            cornerRadius = 8,
+            textVerticalOffset = 7,
+            textHeightReduction = 14,
+            textSize = 12
+        },
+        display = {
+            waitingLabel = "W",
+            activeLabel = "A", 
+            failedLabel = "D",
+            separator = "  |  ",
+            format = "{waiting}: {waitingCount}  |  {active}: {activeCount}  |  {failed}: {failedCount}"
+        }
     },
     
     fileWatcher = {
-        queuePatterns = splitPatterns(external.QUEUE_PATTERNS) or {"batch", "sandbox"},
-        deadletterPattern = external.DEADLETTER_PATTERN or "deadletter"
+        queuePatterns = {"batch", "sandbox"},
+        deadletterPattern = "deadletter"
     },
     
     serverCheck = {
         enabled = true,
-        healthUrl = external.HEALTH_URL,
+        healthUrl = nil,
         processName = nil,
-        checkInterval = external.CHECK_INTERVAL or 5,
-        hideWhenServerDown = external.HIDE_WHEN_DOWN ~= nil and external.HIDE_WHEN_DOWN or true
+        checkInterval = 5,
+        hideWhenServerDown = true
     },
     
-    debug = external.DEBUG or false
+    debug = false
 }
+
+local function loadUserConfig()
+    local userConfigPath = hs.fs.pathToAbsolute("~/.hammerspoon/batch-notifier/user-config.lua")
+    
+    if hs.fs.attributes(userConfigPath) then
+        local chunk, err = loadfile(userConfigPath)
+        if chunk then
+            local success, userConfig = pcall(chunk)
+            if success and type(userConfig) == "table" then
+                return userConfig
+            else
+                print("Error loading user-config.lua:", userConfig or err)
+            end
+        else
+            print("Error parsing user-config.lua:", err)
+        end
+    end
+    
+    return {}
+end
+
+local function deepMerge(base, override)
+    local result = {}
+    
+    for key, value in pairs(base) do
+        if type(value) == "table" and type(override[key]) == "table" then
+            result[key] = deepMerge(value, override[key])
+        else
+            result[key] = override[key] ~= nil and override[key] or value
+        end
+    end
+    
+    for key, value in pairs(override) do
+        if result[key] == nil then
+            result[key] = value
+        end
+    end
+    
+    return result
+end
+
+local userConfig = loadUserConfig()
+local config = deepMerge(defaults, userConfig)
+
+if config.baseDir then
+    config.baseDir = hs.fs.pathToAbsolute(config.baseDir)
+end
 
 return config

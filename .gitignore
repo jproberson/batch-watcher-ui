@@ -1,5 +1,5 @@
-# Environment configuration
-.env
+# User configuration
+user-config.lua
 
 # macOS
 .DS_Store

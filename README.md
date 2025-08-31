@@ -14,20 +14,16 @@ Copy or clone this project to `~/.hammerspoon/batch-notifier`:
 git clone <repo-url> ~/.hammerspoon/batch-notifier
 ```
 
-Create a `.env` file with your configuration:
+Create your configuration file with just the essentials:
 
+```bash
+echo 'return {
+    baseDir = "~/your/batch/directory/path",
+    serverCheck = { healthUrl = "https://your-server.com/health" }
+}' > ~/.hammerspoon/batch-notifier/user-config.lua
 ```
-WATCH_DIR=~/your/batch/directory/path
-HEALTH_URL=https://your-server.com/health-check
-AUTO_START=true
-HIDE_WHEN_DOWN=true
-DEBUG=false
-WIDGET_WIDTH=180
-WIDGET_HEIGHT=30
-QUEUE_PATTERNS=batch,sandbox
-DEADLETTER_PATTERN=deadletter
-CHECK_INTERVAL=5
-```
+
+Edit the `baseDir` and `healthUrl` to match your setup. Everything else uses sensible defaults.
 
 Then add this to your `~/.hammerspoon/init.lua`:
 ```lua
@@ -60,4 +56,61 @@ hs.batchNotifier.stop()     -- Stop monitoring
 hs.batchNotifier.restart()  -- Restart monitoring
 hs.batchNotifier.status()   -- Show current status
 hs.batchNotifier.update()   -- Force file count update
+```
+
+## Configuration Reference
+
+For advanced configuration, you can customize any of these settings in your `~/.hammerspoon/batch-notifier/user-config.lua`:
+
+```lua
+return {
+    -- Required: Directory containing your batch job folders
+    baseDir = "~/your/batch/directory/path",
+    
+    -- Server health monitoring
+    serverCheck = {
+        healthUrl = "https://your-server.com/health",  -- Required if using server monitoring
+        checkInterval = 5,                             -- Seconds between health checks (default: 5)
+        hideWhenServerDown = true,                     -- Hide widget when server is down (default: true)
+        enabled = true                                 -- Enable server monitoring (default: true)
+    },
+    
+    -- Widget appearance and behavior  
+    statusBar = {
+        width = 180,                                   -- Widget width in pixels (default: 180)
+        height = 30,                                   -- Widget height in pixels (default: 30)
+        confirmDeletes = false,                        -- Show confirmation dialogs for file deletion (default: false)
+        colors = {                                     -- Custom colors (optional)
+            background = {red = 0.1, green = 0.1, blue = 0.1, alpha = 0.8},
+            text = {red = 0.9, green = 0.9, blue = 0.9}
+        },
+        ui = {                                         -- Advanced UI customization (optional)
+            edgePadding = 10,                          -- Distance from screen edges (default: 10)
+            cornerRadius = 8,                          -- Rounded corner radius (default: 8)
+            textVerticalOffset = 7,                    -- Text position adjustment (default: 7)
+            textHeightReduction = 14,                  -- Text area height adjustment (default: 14)
+            textSize = 12                              -- Font size (default: 12)
+        },
+        display = {                                    -- Status display customization (optional)
+            waitingLabel = "W",                        -- Label for waiting jobs (default: "W")
+            activeLabel = "A",                         -- Label for active jobs (default: "A")
+            failedLabel = "D",                         -- Label for failed jobs (default: "D")
+            format = "{waiting}: {waitingCount}  |  {active}: {activeCount}  |  {failed}: {failedCount}"
+            -- Alternative formats:
+            -- format = "{waitingCount}w {activeCount}a {failedCount}d"
+            -- format = "[{waiting}:{waitingCount}, {active}:{activeCount}, {failed}:{failedCount}]"
+            -- format = "Waiting: {waitingCount}, Active: {activeCount}, Failed: {failedCount}"
+        }
+    },
+    
+    -- File pattern matching
+    fileWatcher = {
+        queuePatterns = {"batch", "sandbox"},          -- Directory patterns to watch (default: {"batch", "sandbox"})
+        deadletterPattern = "deadletter"               -- Pattern for failed job directories (default: "deadletter")
+    },
+    
+    -- General settings
+    autoStart = true,                                  -- Auto-start when Hammerspoon loads (default: true)
+    debug = false                                      -- Enable debug logging (default: false)
+}
 ```

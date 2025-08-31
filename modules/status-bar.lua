@@ -1,29 +1,18 @@
 
 local StatusBar = {}
 
-local DEFAULTS = {
-    WIDTH = 375,
-    HEIGHT = 30,
-    EDGE_PADDING = 10,
-    CORNER_RADIUS = 8,
-    TEXT_VERTICAL_OFFSET = 7,
-    TEXT_HEIGHT_REDUCTION = 14,
-    TEXT_SIZE = 12,
-    BACKGROUND_ELEMENT_INDEX = 1,
-    TEXT_ELEMENT_START_INDEX = 2
+local ELEMENT_INDICES = {
+    BACKGROUND = 1,
+    TEXT_START = 2
 }
 
-local COLORS = {
-    BACKGROUND = {red = 0.1, green = 0.1, blue = 0.1, alpha = 0.8},
-    TEXT = {red = 0.9, green = 0.9, blue = 0.9}
-}
 
 local StatusBarManager = {
     canvas = nil,
-    width = DEFAULTS.WIDTH,
-    height = DEFAULTS.HEIGHT,
-    backgroundColor = COLORS.BACKGROUND,
-    textColor = COLORS.TEXT,
+    width = nil,
+    height = nil,
+    backgroundColor = nil,
+    textColor = nil,
     waitingCount = 0,
     activeCount = 0,
     failedCount = 0,
@@ -47,12 +36,12 @@ function StatusBar:new(config)
     manager.config = config
     
     if config and config.statusBar then
-        if config.statusBar.height then
-            manager.height = config.statusBar.height
-        end
-        if config.statusBar.width then
-            manager.width = config.statusBar.width
-        end
+        manager.width = config.statusBar.width
+        manager.height = config.statusBar.height
+        manager.backgroundColor = config.statusBar.colors.background
+        manager.textColor = config.statusBar.colors.text
+        manager.ui = config.statusBar.ui
+        manager.display = config.statusBar.display
     end
     
     manager:loadPosition()
@@ -81,8 +70,8 @@ function StatusBarManager:createCanvas()
         self.canvas:delete()
     end
     
-    local x = self.position.x or (screen.x + DEFAULTS.EDGE_PADDING)
-    local y = self.position.y or (screen.y + screen.height - self.height - DEFAULTS.EDGE_PADDING)
+    local x = self.position.x or (screen.x + self.ui.edgePadding)
+    local y = self.position.y or (screen.y + screen.height - self.height - self.ui.edgePadding)
     
     local success, canvas = pcall(function()
         local newCanvas = hs.canvas.new({
@@ -109,7 +98,7 @@ function StatusBarManager:createCanvas()
     self.canvas:insertElement({
         type = "rectangle",
         action = "fill",
-        roundedRectRadii = {xRadius = DEFAULTS.CORNER_RADIUS, yRadius = DEFAULTS.CORNER_RADIUS},
+        roundedRectRadii = {xRadius = self.ui.cornerRadius, yRadius = self.ui.cornerRadius},
         fillColor = self.backgroundColor,
         trackMouseDown = true,
         trackMouseUp = true,
@@ -194,29 +183,30 @@ end
 function StatusBarManager:updateStatusText()
     if not self.canvas then return end
     
-    while #self.canvas > DEFAULTS.BACKGROUND_ELEMENT_INDEX do
-        self.canvas:removeElement(DEFAULTS.TEXT_ELEMENT_START_INDEX)
+    while #self.canvas > ELEMENT_INDICES.BACKGROUND do
+        self.canvas:removeElement(ELEMENT_INDICES.TEXT_START)
     end
     
-    local statusText = string.format(
-        "W: %d  |  A: %d  |  D: %d", 
-        self.waitingCount, 
-        self.activeCount, 
-        self.failedCount
-    )
+    local statusText = self.display.format
+        :gsub("{waiting}", self.display.waitingLabel)
+        :gsub("{active}", self.display.activeLabel)
+        :gsub("{failed}", self.display.failedLabel)
+        :gsub("{waitingCount}", tostring(self.waitingCount))
+        :gsub("{activeCount}", tostring(self.activeCount))
+        :gsub("{failedCount}", tostring(self.failedCount))
     
     self.canvas:insertElement({
         type = "text",
         text = statusText,
         textFont = "Monaco",
-        textSize = DEFAULTS.TEXT_SIZE,
+        textSize = self.ui.textSize,
         textColor = self.textColor,
         textAlignment = "center",
         frame = {
             x = 0, 
-            y = DEFAULTS.TEXT_VERTICAL_OFFSET, 
+            y = self.ui.textVerticalOffset, 
             w = self.width, 
-            h = self.height - DEFAULTS.TEXT_HEIGHT_REDUCTION
+            h = self.height - self.ui.textHeightReduction
         }
     })
 end
