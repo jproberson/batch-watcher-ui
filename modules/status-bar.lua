@@ -491,11 +491,17 @@ function StatusBarManager:showContextMenu(mousePos)
         {title = "Clear Deadletter Files", fn = function() self:clearFiles("failed", skipConfirm) end},
         {title = "-"},
         {title = "Clear All Batch Files", fn = function() self:clearFiles("all", skipConfirm) end},
+        {title = "-"},
+        {title = "Display Style", menu = {
+            {title = "Floating Widget Only", fn = function() self:setDisplayMode("floating") end},
+            {title = "Menu Bar Only", fn = function() self:setDisplayMode("menubar") end},
+            {title = "Both Floating + Menu Bar", fn = function() self:setDisplayMode("both") end}
+        }},
     }
     
     local canvasFrame = self.canvas:frame()
     local screen = self:getScreenInfo()
-    local menuHeight = 120 -- More accurate estimate for 5-item menu (about 24px per item)
+    local menuHeight = 150
     
     local menuPos = {x = mousePos.x, y = mousePos.y}
     
@@ -516,6 +522,12 @@ function StatusBarManager:showContextMenu(mousePos)
     hs.timer.doAfter(0.1, function()
         menu:delete()
     end)
+end
+
+function StatusBarManager:setDisplayMode(mode)
+    if hs.batchNotifier and hs.batchNotifier.setDisplayMode then
+        hs.batchNotifier.setDisplayMode(mode)
+    end
 end
 
 function StatusBarManager:clearFiles(type, skipConfirmation)

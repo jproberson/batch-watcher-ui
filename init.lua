@@ -16,7 +16,8 @@ local batchNotifier = {
 local function initialize()
 	print("Initializing Batch Job Status Widget...")
 
-	local displayMode = config.statusBar.displayMode or "floating"
+	local displayMode = hs.settings.get("batchNotifier.displayMode") or config.statusBar.displayMode or "floating"
+	config.statusBar.displayMode = displayMode
 	
 	if displayMode == "floating" or displayMode == "both" then
 		batchNotifier.statusBar = StatusBar:new(config)
@@ -175,12 +176,49 @@ local function triggerUpdate()
 	end
 end
 
+local function setDisplayMode(mode)
+	hs.settings.set("batchNotifier.displayMode", mode)
+	config.statusBar.displayMode = mode
+	
+	if batchNotifier.statusBar then
+		batchNotifier.statusBar:hide()
+		batchNotifier.statusBar = nil
+	end
+	if batchNotifier.menuBar then
+		batchNotifier.menuBar:hide()
+		batchNotifier.menuBar = nil
+	end
+	
+	if mode == "floating" or mode == "both" then
+		batchNotifier.statusBar = StatusBar:new(config)
+		if batchNotifier.isRunning then
+			batchNotifier.statusBar:show()
+		end
+	end
+	
+	if mode == "menubar" or mode == "both" then
+		batchNotifier.menuBar = MenuBar:new(config)
+		if batchNotifier.isRunning then
+			batchNotifier.menuBar:show()
+		end
+	end
+	
+	if batchNotifier.fileWatcher and batchNotifier.isRunning then
+		hs.timer.doAfter(0.1, function()
+			batchNotifier.fileWatcher:checkForChanges()
+		end)
+	end
+	
+	hs.alert.show("Display mode changed to: " .. mode)
+end
+
 hs.batchNotifier = {
 	start = start,
 	stop = stop,
 	restart = restart,
 	status = status,
 	update = triggerUpdate,
+	setDisplayMode = setDisplayMode,
 }
 
 local function reloadConfig(files)

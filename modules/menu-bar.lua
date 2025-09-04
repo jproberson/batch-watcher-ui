@@ -73,9 +73,21 @@ function MenuBarManager:setupClickHandler()
         {title = "Clear Deadletter Files", fn = function() self:clearFiles("failed") end},
         {title = "-"},
         {title = "Clear All Batch Files", fn = function() self:clearFiles("all") end},
+        {title = "-"},
+        {title = "Display Style", menu = {
+            {title = "Floating Widget Only", fn = function() self:setDisplayMode("floating") end},
+            {title = "Menu Bar Only", fn = function() self:setDisplayMode("menubar") end},
+            {title = "Both Floating + Menu Bar", fn = function() self:setDisplayMode("both") end}
+        }},
     }
     
     self.menubar:setMenu(menuItems)
+end
+
+function MenuBarManager:setDisplayMode(mode)
+    if hs.batchNotifier and hs.batchNotifier.setDisplayMode then
+        hs.batchNotifier.setDisplayMode(mode)
+    end
 end
 
 function MenuBarManager:clearFiles(type)
