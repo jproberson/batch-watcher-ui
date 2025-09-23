@@ -74,6 +74,7 @@ function MenuBarManager:setupClickHandler()
         {title = "-"},
         {title = "Clear All Batch Files", fn = function() self:clearFiles("all") end},
         {title = "-"},
+        {title = "Open Batch Folder", fn = function() self:openBatchFolder() end},
         {title = "Display Style", menu = {
             {title = "Floating Widget Only", fn = function() self:setDisplayMode("floating") end},
             {title = "Menu Bar Only", fn = function() self:setDisplayMode("menubar") end},
@@ -88,6 +89,15 @@ function MenuBarManager:setDisplayMode(mode)
     if hs.batchNotifier and hs.batchNotifier.setDisplayMode then
         hs.batchNotifier.setDisplayMode(mode)
     end
+end
+
+function MenuBarManager:openBatchFolder()
+    if not self.config or not self.config.baseDir then
+        hs.alert.show("No base directory configured")
+        return
+    end
+    
+    hs.execute("open '" .. self.config.baseDir .. "'")
 end
 
 function MenuBarManager:clearFiles(type)
